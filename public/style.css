@@ -10,6 +10,7 @@
   --radius: 10px;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -72,3 +73,38 @@ td.right { text-align: right; white-space: nowrap; }
 .empty { text-align: center; color: var(--muted); padding: 40px 0; }
 dialog { border: none; border-radius: var(--radius); padding: 22px; width: min(480px, 92vw); }
 dialog::backdrop { background: rgba(0,0,0,.3); }
+
+/* Navigation */
+nav .btn.active { background: var(--accent-soft); border-color: var(--accent-soft); }
+.page { max-width: 900px; margin: 0 auto; padding: 20px 24px; }
+@media (max-width: 800px) { .page { padding: 16px; } header { flex-wrap: wrap; gap: 10px; } }
+select { font: inherit; width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+
+/* Champs et détails */
+.section-titre { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); margin: 18px 0 8px; }
+.card > .section-titre:first-child, form > .section-titre:first-of-type { margin-top: 4px; }
+.details { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 6px 16px; margin: 0; }
+.details dt { color: var(--muted); font-size: 14px; }
+.details dd { margin: 0; }
+@media (max-width: 600px) { .details { grid-template-columns: 1fr; } .details dd { margin-bottom: 8px; } }
+.choix { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.choix label, label.coche { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; margin: 0; }
+.choix input, label.coche input, .option-etape input { width: auto; }
+
+/* Configuration des champs */
+.champ-ligne { display: flex; gap: 10px; align-items: start; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 8px; }
+.champ-ligne.section { background: var(--accent-soft); margin-top: 18px; align-items: center; }
+.champ-ligne.section input { font-weight: 600; }
+.champ-config { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.ordre { display: flex; flex-direction: column; gap: 4px; }
+.barre-enregistrer { position: sticky; bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 14px rgba(0,0,0,.06); }
+.option-etape { display: flex; gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 15px; }
+
+/* Étapes patient */
+.stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.stepper .trait { flex: 1; height: 2px; background: var(--border); }
+.pas { background: none; border: none; color: var(--muted); padding: 4px; display: flex; align-items: center; gap: 8px; }
+.pas .num { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
+.pas.actif { color: var(--accent); font-weight: 600; }
+.pas.actif .num { border-color: var(--accent); }
+.pas.fait .num { background: var(--accent); border-color: var(--accent); color: #fff; }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dépôt de documents</title>
+  <title>Votre dossier</title>
   <link rel="stylesheet" href="/style.css">
   <style>
     main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
@@ -15,31 +15,95 @@
   <header><h1>Cabinet de psychomotricité</h1></header>
   <main id="app"><div class="card empty">Chargement…</div></main>
 
+  <script src="/champs.js"></script>
   <script>
     const token = location.pathname.split('/').pop();
-    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const app = document.getElementById('app');
+    let d = null;
+    let etape = 1;
 
-    async function charger() {
+    async function charger(forcerEtape) {
       const res = await fetch(`/api/public/demandes/${token}`);
       if (!res.ok) {
-        document.getElementById('app').innerHTML = '<div class="card empty">Ce lien n\'est pas valide ou a expiré.<br>Contactez votre psychomotricienne.</div>';
+        app.innerHTML = '<div class="card empty">Ce lien n\'est pas valide ou a expiré.<br>Contactez votre psychomotricienne.</div>';
         return;
       }
-      const d = await res.json();
+      d = await res.json();
+      etape = forcerEtape ?? (d.avecFormulaire && !d.formulaireRempli ? 1 : 2);
+      if (!d.avecFormulaire) etape = 2;
+      afficher();
+    }
+
+    function stepper() {
+      if (!d.avecFormulaire || !d.items.length) return '';
+      const pas = (n, titre, fait) => `
+        <button class="pas ${etape === n ? 'actif' : ''} ${fait ? 'fait' : ''}" onclick="allerA(${n})" ${n === 2 && !d.formulaireRempli ? 'disabled' : ''}>
+          <span class="num">${fait ? '✓' : n}</span> ${titre}
+        </button>`;
+      const docsFaits = d.items.every((i) => i.depose);
+      return `<div class="stepper">${pas(1, 'Formulaire', d.formulaireRempli)}<span class="trait"></span>${pas(2, 'Documents', docsFaits)}</div>`;
+    }
+
+    function allerA(n) { etape = n; afficher(); }
+
+    function afficher() {
+      const intro = `
+        <div class="card">
+          <h2>Bonjour ${escHtml(d.prenom)},</h2>
+          <p style="white-space:pre-wrap;margin-bottom:0">${escHtml(d.message) || 'Merci de compléter votre dossier ci-dessous.'}</p>
+        </div>`;
+      app.innerHTML = intro + stepper() + (etape === 1 ? etapeFormulaire() : etapeDocuments());
+      if (etape === 1) document.getElementById('formPatient').onsubmit = envoyerFormulaire;
+    }
+
+    function etapeFormulaire() {
+      return `
+        <form class="card" id="formPatient">
+          <h2>${d.items.length ? 'Étape 1 : ' : ''}Vos informations</h2>
+          <p class="muted">Les champs marqués d'un * sont obligatoires.</p>
+          ${d.champs.map((c) => champInput(c, d.valeurs[c.id])).join('')}
+          <div class="actions" style="justify-content:flex-end">
+            <button type="submit">${d.items.length ? 'Enregistrer et continuer →' : 'Envoyer'}</button>
+          </div>
+        </form>`;
+    }
+
+    async function envoyerFormulaire(e) {
+      e.preventDefault();
+      const valeurs = lireChamps(e.target, d.champs);
+      const manquants = champsManquants(d.champs, valeurs);
+      if (manquants.length) return alert('Merci de compléter : ' + manquants.join(', '));
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Envoi…';
+      const res = await fetch(`/api/public/demandes/${token}/formulaire`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(valeurs),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erreur lors de l\'envoi, réessayez.');
+        btn.disabled = false; btn.textContent = 'Réessayer';
+        return;
+      }
+      window.scrollTo(0, 0);
+      charger(2);
+    }
+
+    function etapeDocuments() {
+      if (!d.items.length) {
+        return '<div class="card" style="text-align:center">Merci, vos informations ont bien été envoyées ✓</div>';
+      }
       const faits = d.items.filter((i) => i.depose).length;
-      document.getElementById('app').innerHTML = `
+      const toutFait = faits === d.items.length && (!d.avecFormulaire || d.formulaireRempli);
+      return `
         <div class="card">
-          <h2>Bonjour ${esc(d.prenom)},</h2>
-          <p style="white-space:pre-wrap">${esc(d.message) || 'Merci de déposer les documents ci-dessous.'}</p>
+          <h2>${d.avecFormulaire ? 'Étape 2 : ' : ''}Vos documents</h2>
           <p class="muted">${faits} / ${d.items.length} document(s) déposé(s)</p>
-        </div>
-        <div class="card">
           ${d.items.map((it) => `
             <div class="item">
               <div>
-                <strong>${esc(it.libelle)}</strong><br>
+                <strong>${escHtml(it.libelle)}</strong><br>
                 ${it.depose
-                  ? `<span class="badge ok">✓ Déposé : ${esc(it.nomFichier)}</span>`
+                  ? `<span class="badge ok">✓ Déposé : ${escHtml(it.nomFichier)}</span>`
                   : '<span class="muted">En attente</span>'}
               </div>
               <label class="btn ${it.depose ? 'secondary' : ''} small" style="margin:0;color:${it.depose ? 'var(--accent)' : '#fff'}">
@@ -48,7 +112,7 @@
               </label>
             </div>`).join('')}
         </div>
-        ${faits === d.items.length ? '<div class="card" style="text-align:center">Merci, tous les documents ont bien été reçus ✓</div>' : ''}`;
+        ${toutFait ? '<div class="card" style="text-align:center">Merci, votre dossier est complet ✓</div>' : ''}`;
     }
 
     async function deposer(itemId, input) {
@@ -59,7 +123,7 @@
       fd.append('fichier', f);
       const res = await fetch(`/api/public/demandes/${token}/items/${itemId}`, { method: 'POST', body: fd });
       if (!res.ok) alert('Erreur lors de l\'envoi, réessayez.');
-      charger();
+      charger(2);
     }
 
     charger();

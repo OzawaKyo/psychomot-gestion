@@ -10,10 +10,31 @@ const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
+// --- Champs configurables de la fiche patient ---
+// patient: true = demandé au patient dans le formulaire du lien ; false = usage interne
+const TYPES_CHAMPS = ['section', 'texte', 'texte_long', 'nombre', 'date', 'liste', 'choix_multiples', 'oui_non'];
+const CHAMPS_DEFAUT = [
+  { label: 'Motif de consultation', type: 'section' },
+  { label: 'Motif de la demande', type: 'texte_long', requis: true, patient: true },
+  { label: 'Adressé par', type: 'texte', patient: true },
+  { label: 'Scolarité', type: 'section' },
+  { label: 'École', type: 'texte', patient: true },
+  { label: 'Classe', type: 'texte', patient: true },
+  { label: 'Santé', type: 'section' },
+  { label: 'Médecin traitant', type: 'texte', patient: true },
+  { label: 'Antécédents médicaux', type: 'texte_long', patient: true },
+  { label: 'Suivis en cours', type: 'choix_multiples', options: ['Orthophonie', 'Ergothérapie', 'Psychologue', 'Kinésithérapie', 'Autre'], patient: true },
+  { label: 'Notes cliniques', type: 'section' },
+  { label: 'Observations', type: 'texte_long', patient: false },
+].map((c, i) => ({ id: `defaut-${i}`, options: [], requis: false, patient: false, ...c }));
+
 // --- Stockage JSON (maquette) ---
 function load() {
-  if (!fs.existsSync(DATA_FILE)) return { patients: [], documents: [], demandes: [] };
-  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  const db = fs.existsSync(DATA_FILE)
+    ? JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
+    : { patients: [], documents: [], demandes: [] };
+  db.champs ??= CHAMPS_DEFAUT;
+  return db;
 }
 function save(db) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
@@ -113,9 +134,66 @@ app.put('/api/patients/:id', (req, res) => {
   for (const k of ['nom', 'prenom', 'dateNaissance', 'email', 'telephone', 'notes']) {
     if (req.body[k] !== undefined) patient[k] = req.body[k];
   }
+  if (req.body.details && typeof req.body.details === 'object') {
+    patient.details = { ...patient.details, ...nettoyerValeurs(db.champs, req.body.details) };
+  }
   save(db);
   res.json(patient);
 });
+
+// Configuration des champs de la fiche
+app.get('/api/champs', (req, res) => res.json(load().champs));
+
+app.put('/api/champs', (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'Liste attendue' });
+  const champs = [];
+  for (const c of req.body) {
+    const label = String(c.label || '').trim();
+    if (!label) return res.status(400).json({ error: 'Chaque champ doit avoir un libellé' });
+    if (!TYPES_CHAMPS.includes(c.type)) return res.status(400).json({ error: `Type inconnu : ${c.type}` });
+    const options = Array.isArray(c.options) ? c.options.map((o) => String(o).trim()).filter(Boolean) : [];
+    if (['liste', 'choix_multiples'].includes(c.type) && !options.length) {
+      return res.status(400).json({ error: `« ${label} » : ajoutez au moins une option` });
+    }
+    champs.push({
+      id: c.id || id(), label, type: c.type, options,
+      requis: c.type !== 'section' && !!c.requis,
+      patient: c.type !== 'section' && !!c.patient,
+    });
+  }
+  const db = load();
+  db.champs = champs;
+  save(db);
+  res.json(champs);
+});
+
+// Ne garde que les champs connus, avec une valeur au bon format
+function nettoyerValeurs(champs, valeurs) {
+  const propres = {};
+  for (const c of champs) {
+    if (c.type === 'section' || !(c.id in valeurs)) continue;
+    const v = valeurs[c.id];
+    propres[c.id] = c.type === 'choix_multiples'
+      ? (Array.isArray(v) ? v.map(String).filter((o) => c.options.includes(o)) : [])
+      : String(v ?? '').trim().slice(0, 5000);
+  }
+  return propres;
+}
+
+const estVide = (v) => (Array.isArray(v) ? !v.length : !v);
+
+// Champs à présenter au patient, avec leurs titres de section (sections vides retirées)
+function champsPatient(champs) {
+  const out = [];
+  let section = null;
+  for (const c of champs) {
+    if (c.type === 'section') { section = c; continue; }
+    if (!c.patient) continue;
+    if (section) { out.push(section); section = null; }
+    out.push(c);
+  }
+  return out;
+}
 
 app.delete('/api/patients/:id', (req, res) => {
   const db = load();
@@ -187,12 +265,17 @@ app.post('/api/patients/:id/demandes', (req, res) => {
     return res.status(404).json({ error: 'Patient introuvable' });
   }
   const libelles = (req.body.libelles || []).map((l) => String(l).trim()).filter(Boolean);
-  if (!libelles.length) return res.status(400).json({ error: 'Au moins un document requis' });
+  const avecFormulaire = !!req.body.avecFormulaire;
+  if (!libelles.length && !avecFormulaire) {
+    return res.status(400).json({ error: 'Demandez au moins le formulaire ou un document' });
+  }
   const demande = {
     id: id(),
     token: crypto.randomBytes(16).toString('hex'),
     patientId: req.params.id,
     message: req.body.message || '',
+    avecFormulaire,
+    formulaireRempliAt: null,
     items: libelles.map((libelle) => ({ id: id(), libelle, documentId: null })),
     createdAt: new Date().toISOString(),
   };
@@ -221,14 +304,37 @@ app.get('/api/public/demandes/:token', (req, res) => {
   const dem = findDemande(db, req.params.token);
   if (!dem) return res.status(404).json({ error: 'Lien invalide ou expiré' });
   const patient = db.patients.find((p) => p.id === dem.patientId);
+  const champs = dem.avecFormulaire ? champsPatient(db.champs) : [];
+  const valeurs = {};
+  for (const c of champs) if (patient?.details?.[c.id] !== undefined) valeurs[c.id] = patient.details[c.id];
   res.json({
     prenom: patient?.prenom || '',
     message: dem.message,
+    avecFormulaire: !!dem.avecFormulaire,
+    formulaireRempli: !!dem.formulaireRempliAt,
+    champs,
+    valeurs,
     items: dem.items.map((it) => {
       const doc = it.documentId && db.documents.find((d) => d.id === it.documentId);
       return { id: it.id, libelle: it.libelle, depose: !!doc, nomFichier: doc?.nom || null };
     }),
   });
+});
+
+app.post('/api/public/demandes/:token/formulaire', (req, res) => {
+  const db = load();
+  const dem = findDemande(db, req.params.token);
+  const patient = dem && db.patients.find((p) => p.id === dem.patientId);
+  if (!patient || !dem.avecFormulaire) return res.status(404).json({ error: 'Lien invalide' });
+  // seuls les champs destinés au patient peuvent être modifiés via le lien
+  const champs = champsPatient(db.champs);
+  const valeurs = nettoyerValeurs(champs, req.body || {});
+  const manquants = champs.filter((c) => c.requis && estVide(valeurs[c.id])).map((c) => c.label);
+  if (manquants.length) return res.status(400).json({ error: `Champs obligatoires : ${manquants.join(', ')}` });
+  patient.details = { ...patient.details, ...valeurs };
+  dem.formulaireRempliAt = new Date().toISOString();
+  save(db);
+  res.json({ ok: true });
 });
 
 app.post('/api/public/demandes/:token/items/:itemId', upload.single('fichier'), (req, res) => {

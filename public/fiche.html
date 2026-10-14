@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fiche patient</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    main { max-width: 820px; margin: 0 auto; padding: 24px 16px; }
+    .entete { display: flex; justify-content: space-between; align-items: start; gap: 12px; flex-wrap: wrap; }
+    @media print {
+      body { background: #fff; }
+      header, .no-print { display: none !important; }
+      .card { border: none; padding: 0; margin-bottom: 20px; break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header><h1>Cabinet de psychomotricité</h1></header>
+  <main id="fiche"><div class="card empty">Chargement…</div></main>
+
+  <script src="/champs.js"></script>
+  <script>
+    const fmtDate = (iso) => new Date(iso).toLocaleDateString('fr-FR');
+    const id = new URLSearchParams(location.search).get('id');
+
+    function age(dateNaissance) {
+      const n = new Date(dateNaissance), auj = new Date();
+      let a = auj.getFullYear() - n.getFullYear();
+      if (auj < new Date(auj.getFullYear(), n.getMonth(), n.getDate())) a--;
+      return a;
+    }
+
+    (async () => {
+      const [patients, champs, docs, demandes] = await Promise.all([
+        fetch('/api/patients').then((r) => r.json()),
+        fetch('/api/champs').then((r) => r.json()),
+        fetch(`/api/patients/${id}/documents`).then((r) => r.json()),
+        fetch(`/api/patients/${id}/demandes`).then((r) => r.json()),
+      ]);
+      const p = patients.find((x) => x.id === id);
+      if (!p) { document.getElementById('fiche').innerHTML = '<div class="card empty">Patient introuvable.</div>'; return; }
+      document.title = `Fiche – ${p.prenom} ${p.nom}`;
+      const details = p.details || {};
+      const derniereReponse = demandes.map((d) => d.formulaireRempliAt).filter(Boolean).sort().pop();
+
+      document.getElementById('fiche').innerHTML = `
+        <div class="card">
+          <div class="entete">
+            <div>
+              <h2 style="font-size:22px">${escHtml(p.prenom)} ${escHtml(p.nom)}</h2>
+              <div class="muted">Fiche éditée le ${fmtDate(new Date())}
+                ${derniereReponse ? ` · formulaire patient rempli le ${fmtDate(derniereReponse)}` : ''}</div>
+            </div>
+            <button class="no-print" onclick="print()">Imprimer / PDF</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="section-titre">Informations de base</h3>
+          <dl class="details">
+            <dt>Date de naissance</dt>
+            <dd>${p.dateNaissance ? `${fmtDate(p.dateNaissance)} (${age(p.dateNaissance)} ans)` : '<span class="muted">—</span>'}</dd>
+            <dt>Email</dt><dd>${escHtml(p.email) || '<span class="muted">—</span>'}</dd>
+            <dt>Téléphone</dt><dd>${escHtml(p.telephone) || '<span class="muted">—</span>'}</dd>
+            <dt>Notes</dt><dd style="white-space:pre-wrap">${escHtml(p.notes) || '<span class="muted">—</span>'}</dd>
+            <dt>Patient depuis</dt><dd>${fmtDate(p.createdAt)}</dd>
+          </dl>
+        </div>
+
+        ${grouperParSection(champs).map((g) => `
+          <div class="card">
+            <h3 class="section-titre">${escHtml(g.titre || 'Détails')}</h3>
+            <dl class="details">
+              ${g.champs.map((c) => `<dt>${escHtml(c.label)}</dt><dd>${valeurAffichee(c, details[c.id])}</dd>`).join('')}
+            </dl>
+          </div>`).join('')}
+
+        <div class="card">
+          <h3 class="section-titre">Documents (${docs.length})</h3>
+          ${docs.length ? `<table>
+            <tr><th>Nom</th><th>Origine</th><th>Date</th></tr>
+            ${docs.map((d) => `<tr>
+              <td><a href="/api/documents/${d.id}/fichier" target="_blank">${escHtml(d.nom)}</a></td>
+              <td>${d.source === 'patient' ? `Patient${d.libelle ? ' · ' + escHtml(d.libelle) : ''}` : 'Cabinet'}</td>
+              <td>${fmtDate(d.createdAt)}</td>
+            </tr>`).join('')}
+          </table>` : '<p class="muted">Aucun document.</p>'}
+        </div>`;
+    })();
+  </script>
+</body>
+</html>

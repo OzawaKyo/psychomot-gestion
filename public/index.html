@@ -9,10 +9,14 @@
 <body>
   <header>
     <h1>Cabinet de psychomotricité</h1>
-    <button id="btnNouveau">+ Nouveau patient</button>
+    <nav class="actions">
+      <a href="#patients" class="btn secondary" data-vue="patients">Patients</a>
+      <a href="#formulaire" class="btn secondary" data-vue="formulaire">Champs de la fiche</a>
+      <button id="btnNouveau">+ Nouveau patient</button>
+    </nav>
   </header>
 
-  <div class="layout">
+  <div class="layout" id="vuePatients">
     <aside class="card">
       <input id="recherche" placeholder="Rechercher un patient…" style="margin-bottom:10px">
       <ul class="patient-list" id="listePatients"></ul>
@@ -23,7 +27,28 @@
     </main>
   </div>
 
-  <!-- Formulaire patient -->
+  <div id="vueFormulaire" class="page" hidden>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;flex-wrap:wrap">
+        <div>
+          <h2>Champs de la fiche patient</h2>
+          <p class="muted" style="margin:0">Ces champs complètent les informations de base de chaque patient.
+            Cochez « Demandé au patient » pour qu'ils apparaissent dans l'étape 1 du lien envoyé au patient.</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="btnAjoutChamp">+ Ajouter un champ</button>
+          <button class="secondary" id="btnAjoutSection">+ Ajouter une section</button>
+        </div>
+      </div>
+    </div>
+    <div id="listeChamps"></div>
+    <div class="card barre-enregistrer">
+      <span class="muted" id="etatChamps"></span>
+      <button id="btnEnregistrerChamps">Enregistrer les champs</button>
+    </div>
+  </div>
+
+  <!-- Formulaire infos de base -->
   <dialog id="dlgPatient">
     <form id="formPatient" method="dialog">
       <h2 id="dlgTitre">Nouveau patient</h2>
@@ -44,17 +69,22 @@
     </form>
   </dialog>
 
-  <!-- Formulaire demande de documents -->
+  <!-- Formulaire demande -->
   <dialog id="dlgDemande">
     <form id="formDemande" method="dialog">
-      <h2>Demander des documents</h2>
-      <div class="field">
-        <label>Nombre de documents</label>
-        <input id="nbDocs" type="number" min="1" max="20" value="2">
+      <h2>Envoyer une demande au patient</h2>
+      <label class="option-etape">
+        <input type="checkbox" name="avecFormulaire" checked>
+        <span><strong>Étape 1 : formulaire</strong><br>
+          <span class="muted">Le patient remplit les champs marqués « Demandé au patient ».</span></span>
+      </label>
+      <div class="field" style="margin-top:14px">
+        <label>Étape 2 : nombre de documents à déposer</label>
+        <input id="nbDocs" type="number" min="0" max="20" value="2">
       </div>
       <div id="libelles"></div>
       <div class="field"><label>Message pour le patient (optionnel)</label>
-        <textarea name="message" placeholder="Bonjour, merci de déposer les documents suivants avant notre rendez-vous."></textarea>
+        <textarea name="message" placeholder="Bonjour, merci de compléter ce formulaire et de déposer les documents avant notre rendez-vous."></textarea>
       </div>
       <div class="actions" style="justify-content:flex-end">
         <button type="button" class="secondary" onclick="dlgDemande.close()">Annuler</button>
@@ -63,6 +93,7 @@
     </form>
   </dialog>
 
+  <script src="/champs.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
