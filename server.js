@@ -87,10 +87,11 @@ function removeFile(doc) {
 const app = express();
 
 // --- Protection de l'espace psychomotricienne (mot de passe via ADMIN_PASSWORD) ---
-// La page patient (/d/...), son API et la feuille de style restent publiques.
+// La page patient (/d/...), son API et les fichiers qu'elle charge restent publics.
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const estPublic = (p) => p === '/style.css' || p.startsWith('/d/') || p.startsWith('/api/public/');
+const FICHIERS_PUBLICS = ['/style.css', '/champs.js'];
+const estPublic = (p) => FICHIERS_PUBLICS.includes(p) || p.startsWith('/d/') || p.startsWith('/api/public/');
 const egal = (a, b) => {
   const ha = crypto.createHash('sha256').update(a).digest();
   const hb = crypto.createHash('sha256').update(b).digest();
