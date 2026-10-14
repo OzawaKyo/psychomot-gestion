@@ -28,12 +28,24 @@ const CHAMPS_DEFAUT = [
   { label: 'Observations', type: 'texte_long', patient: false },
 ].map((c, i) => ({ id: `defaut-${i}`, options: [], requis: false, patient: false, ...c }));
 
+// --- Catalogue des documents qu'on peut demander au patient ---
+// aide : précision affichée au patient sous le nom du document
+const TYPES_DOCUMENTS_DEFAUT = [
+  { libelle: 'Ordonnance', aide: 'Prescription du médecin pour le bilan ou la rééducation' },
+  { libelle: 'Attestation de carte vitale', aide: '' },
+  { libelle: 'Attestation de mutuelle', aide: '' },
+  { libelle: 'Carnet de santé', aide: 'Pages de suivi du développement et des vaccins' },
+  { libelle: 'Bilan orthophonique', aide: 'Si un bilan a déjà été réalisé' },
+  { libelle: 'Dernier bulletin scolaire', aide: '' },
+].map((d, i) => ({ id: `defaut-${i}`, ...d }));
+
 // --- Stockage JSON (maquette) ---
 function load() {
   const db = fs.existsSync(DATA_FILE)
     ? JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
     : { patients: [], documents: [], demandes: [] };
   db.champs ??= CHAMPS_DEFAUT;
+  db.typesDocuments ??= TYPES_DOCUMENTS_DEFAUT;
   return db;
 }
 function save(db) {
@@ -167,6 +179,23 @@ app.put('/api/champs', (req, res) => {
   res.json(champs);
 });
 
+// Catalogue des documents
+app.get('/api/types-documents', (req, res) => res.json(load().typesDocuments));
+
+app.put('/api/types-documents', (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: 'Liste attendue' });
+  const types = [];
+  for (const t of req.body) {
+    const libelle = String(t.libelle || '').trim();
+    if (!libelle) return res.status(400).json({ error: 'Chaque document doit avoir un nom' });
+    types.push({ id: t.id || id(), libelle, aide: String(t.aide || '').trim() });
+  }
+  const db = load();
+  db.typesDocuments = types;
+  save(db);
+  res.json(types);
+});
+
 // Ne garde que les champs connus, avec une valeur au bon format
 function nettoyerValeurs(champs, valeurs) {
   const propres = {};
@@ -264,9 +293,11 @@ app.post('/api/patients/:id/demandes', (req, res) => {
   if (!db.patients.some((p) => p.id === req.params.id)) {
     return res.status(404).json({ error: 'Patient introuvable' });
   }
-  const libelles = (req.body.libelles || []).map((l) => String(l).trim()).filter(Boolean);
+  const documents = (Array.isArray(req.body.documents) ? req.body.documents : [])
+    .map((d) => ({ libelle: String(d.libelle || '').trim(), aide: String(d.aide || '').trim() }))
+    .filter((d) => d.libelle);
   const avecFormulaire = !!req.body.avecFormulaire;
-  if (!libelles.length && !avecFormulaire) {
+  if (!documents.length && !avecFormulaire) {
     return res.status(400).json({ error: 'Demandez au moins le formulaire ou un document' });
   }
   const demande = {
@@ -276,7 +307,7 @@ app.post('/api/patients/:id/demandes', (req, res) => {
     message: req.body.message || '',
     avecFormulaire,
     formulaireRempliAt: null,
-    items: libelles.map((libelle) => ({ id: id(), libelle, documentId: null })),
+    items: documents.map((d) => ({ id: id(), ...d, documentId: null })),
     createdAt: new Date().toISOString(),
   };
   db.demandes.push(demande);
@@ -316,7 +347,7 @@ app.get('/api/public/demandes/:token', (req, res) => {
     valeurs,
     items: dem.items.map((it) => {
       const doc = it.documentId && db.documents.find((d) => d.id === it.documentId);
-      return { id: it.id, libelle: it.libelle, depose: !!doc, nomFichier: doc?.nom || null };
+      return { id: it.id, libelle: it.libelle, aide: it.aide || '', depose: !!doc, nomFichier: doc?.nom || null };
     }),
   });
 });

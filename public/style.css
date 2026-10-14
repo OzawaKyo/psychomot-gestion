@@ -71,7 +71,7 @@ td.right { text-align: right; white-space: nowrap; }
 .link-box { display: flex; gap: 8px; margin-top: 6px; }
 .link-box input { font-size: 13px; }
 .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-dialog { border: none; border-radius: var(--radius); padding: 22px; width: min(480px, 92vw); }
+dialog { border: none; border-radius: var(--radius); padding: 22px; width: min(520px, 92vw); max-height: 90vh; overflow: auto; }
 dialog::backdrop { background: rgba(0,0,0,.3); }
 
 /* Navigation */
@@ -108,3 +108,13 @@ select { font: inherit; width: 100%; padding: 8px 10px; border: 1px solid var(--
 .pas.actif { color: var(--accent); font-weight: 600; }
 .pas.actif .num { border-color: var(--accent); }
 .pas.fait .num { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Sélection des documents dans la demande */
+.catalogue { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+.coche-doc { display: flex; gap: 10px; align-items: start; padding: 9px 12px; margin: 0; color: var(--text); font-size: 14px; cursor: pointer; border-top: 1px solid var(--border); }
+.coche-doc:first-child { border-top: none; }
+.coche-doc:hover { background: var(--bg); }
+.coche-doc input { width: auto; margin-top: 3px; }
+.coche-doc .muted { font-size: 12px; }
+.catalogue > p { margin: 10px 12px; }
+.doc-libre { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px dashed var(--border); border-radius: 8px; margin-bottom: 10px; }

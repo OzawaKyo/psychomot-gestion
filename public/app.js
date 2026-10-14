@@ -16,6 +16,7 @@ const json = (method, body) => ({ method, headers: { 'Content-Type': 'applicatio
 
 let patients = [];
 let champs = [];
+let typesDocs = [];
 let selectedId = null;
 let editingId = null;
 let docsCourants = [];
@@ -23,11 +24,13 @@ let modeDetails = false;
 
 // ---------- Navigation ----------
 function afficherVue() {
-  const vue = location.hash === '#formulaire' ? 'formulaire' : 'patients';
+  const vue = ['#formulaire', '#documents'].includes(location.hash) ? location.hash.slice(1) : 'patients';
   $('#vuePatients').hidden = vue !== 'patients';
   $('#vueFormulaire').hidden = vue !== 'formulaire';
+  $('#vueDocuments').hidden = vue !== 'documents';
   document.querySelectorAll('[data-vue]').forEach((a) => a.classList.toggle('active', a.dataset.vue === vue));
   if (vue === 'formulaire') ouvrirConfigChamps();
+  if (vue === 'documents') ouvrirConfigTypesDocs();
 }
 window.addEventListener('hashchange', afficherVue);
 
@@ -276,33 +279,51 @@ async function renommerDoc(id) {
 // ---------- Demandes ----------
 const dlgDemande = $('#dlgDemande');
 
-function majLibelles() {
-  const n = Math.min(20, Math.max(0, +$('#nbDocs').value || 0));
-  const box = $('#libelles');
-  const actuels = [...box.querySelectorAll('input')].map((i) => i.value);
-  box.innerHTML = Array.from({ length: n }, (_, i) => `
-    <div class="field"><label>Document ${i + 1}</label>
-      <input class="libelle" value="${esc(actuels[i] ?? '')}" placeholder="ex : Ordonnance, bilan orthophonique…" required>
-    </div>`).join('');
-}
-$('#nbDocs').addEventListener('input', majLibelles);
-
 function ouvrirDemande() {
   $('#formDemande').reset();
-  $('#libelles').innerHTML = '';
-  majLibelles();
+  $('#catalogueDocs').innerHTML = typesDocs.length
+    ? typesDocs.map((t) => `
+      <label class="coche-doc">
+        <input type="checkbox" class="doc-catalogue" value="${t.id}">
+        <span>${esc(t.libelle)}${t.aide ? `<br><span class="muted">${esc(t.aide)}</span>` : ''}</span>
+      </label>`).join('')
+    : '<p class="muted">Aucun document dans la liste. <a href="#documents" onclick="dlgDemande.close()">Configurer la liste</a></p>';
+  $('#docsLibres').innerHTML = '';
   dlgDemande.showModal();
 }
+
+$('#btnDocLibre').onclick = () => {
+  const ligne = document.createElement('div');
+  ligne.className = 'doc-libre';
+  ligne.innerHTML = `
+    <div class="row">
+      <input class="libelle" placeholder="Nom du document (ex : Compte rendu ergothérapie)" required>
+      <button type="button" class="danger small" style="flex:0" title="Retirer">✕</button>
+    </div>
+    <input class="aide" placeholder="Précision pour le patient (optionnel)">
+    <label class="coche"><input type="checkbox" class="garder"> Ajouter à la liste des documents</label>`;
+  ligne.querySelector('button').onclick = () => ligne.remove();
+  $('#docsLibres').append(ligne);
+  ligne.querySelector('.libelle').focus();
+};
 
 $('#formDemande').onsubmit = async (e) => {
   e.preventDefault();
   const form = e.target;
-  const libelles = [...document.querySelectorAll('.libelle')].map((i) => i.value);
+  const coches = [...form.querySelectorAll('.doc-catalogue:checked')].map((i) => i.value);
+  const documents = typesDocs.filter((t) => coches.includes(t.id)).map(({ libelle, aide }) => ({ libelle, aide }));
+  const nouveaux = [];
+  for (const ligne of form.querySelectorAll('.doc-libre')) {
+    const doc = { libelle: ligne.querySelector('.libelle').value.trim(), aide: ligne.querySelector('.aide').value.trim() };
+    documents.push(doc);
+    if (ligne.querySelector('.garder').checked) nouveaux.push(doc);
+  }
+  const avecFormulaire = form.elements.avecFormulaire.checked;
+  if (!avecFormulaire && !documents.length) return alert('Cochez le formulaire ou au moins un document.');
   await api(`/api/patients/${selectedId}/demandes`, json('POST', {
-    libelles,
-    avecFormulaire: form.elements.avecFormulaire.checked,
-    message: form.elements.message.value,
+    documents, avecFormulaire, message: form.elements.message.value,
   }));
+  if (nouveaux.length) typesDocs = await api('/api/types-documents', json('PUT', [...typesDocs, ...nouveaux]));
   dlgDemande.close();
   await selectionner(selectedId);
 };
@@ -417,9 +438,69 @@ $('#btnEnregistrerChamps').onclick = async () => {
   $('#etatChamps').textContent = 'Enregistré ✓';
 };
 
+// ---------- Configuration du catalogue de documents ----------
+let typesDocsEdition = [];
+
+function ouvrirConfigTypesDocs() {
+  typesDocsEdition = structuredClone(typesDocs);
+  $('#etatTypesDocs').textContent = '';
+  rendreConfigTypesDocs();
+}
+
+function rendreConfigTypesDocs() {
+  const n = typesDocsEdition.length;
+  $('#listeTypesDocs').innerHTML = n ? typesDocsEdition.map((t, i) => `
+    <div class="champ-ligne">
+      <div class="ordre">
+        <button class="secondary small" data-action="monter" data-i="${i}" ${i === 0 ? 'disabled' : ''} title="Monter">↑</button>
+        <button class="secondary small" data-action="descendre" data-i="${i}" ${i === n - 1 ? 'disabled' : ''} title="Descendre">↓</button>
+      </div>
+      <div class="champ-config">
+        <input data-i="${i}" data-k="libelle" value="${esc(t.libelle)}" placeholder="Nom du document">
+        <input data-i="${i}" data-k="aide" value="${esc(t.aide)}" placeholder="Précision pour le patient (optionnel)">
+      </div>
+      <button class="danger small" data-action="supprimer" data-i="${i}" title="Supprimer">✕</button>
+    </div>`).join('') : '<div class="card empty">Aucun document. Ajoutez-en un pour commencer.</div>';
+}
+
+$('#listeTypesDocs').addEventListener('input', (e) => {
+  const { i, k } = e.target.dataset;
+  if (k === undefined) return;
+  typesDocsEdition[i][k] = e.target.value;
+  $('#etatTypesDocs').textContent = 'Modifications non enregistrées';
+});
+
+$('#listeTypesDocs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const i = +btn.dataset.i;
+  if (btn.dataset.action === 'supprimer') {
+    typesDocsEdition.splice(i, 1);
+  } else {
+    const j = btn.dataset.action === 'monter' ? i - 1 : i + 1;
+    [typesDocsEdition[i], typesDocsEdition[j]] = [typesDocsEdition[j], typesDocsEdition[i]];
+  }
+  $('#etatTypesDocs').textContent = 'Modifications non enregistrées';
+  rendreConfigTypesDocs();
+});
+
+$('#btnAjoutTypeDoc').onclick = () => {
+  typesDocsEdition.push({ libelle: '', aide: '' });
+  $('#etatTypesDocs').textContent = 'Modifications non enregistrées';
+  rendreConfigTypesDocs();
+  const inputs = $('#listeTypesDocs').querySelectorAll('input[data-k="libelle"]');
+  inputs[inputs.length - 1].focus();
+};
+
+$('#btnEnregistrerTypesDocs').onclick = async () => {
+  typesDocs = await api('/api/types-documents', json('PUT', typesDocsEdition));
+  ouvrirConfigTypesDocs();
+  $('#etatTypesDocs').textContent = 'Enregistré ✓';
+};
+
 // ---------- Démarrage ----------
 (async () => {
-  champs = await api('/api/champs');
+  [champs, typesDocs] = await Promise.all([api('/api/champs'), api('/api/types-documents')]);
   await chargerPatients();
   afficherVue();
 })();
