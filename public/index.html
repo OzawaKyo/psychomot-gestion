@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestion patients</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Cabinet de psychomotricité</h1>
+    <button id="btnNouveau">+ Nouveau patient</button>
+  </header>
+
+  <div class="layout">
+    <aside class="card">
+      <input id="recherche" placeholder="Rechercher un patient…" style="margin-bottom:10px">
+      <ul class="patient-list" id="listePatients"></ul>
+    </aside>
+
+    <main id="detail">
+      <div class="card empty">Sélectionnez ou créez un patient.</div>
+    </main>
+  </div>
+
+  <!-- Formulaire patient -->
+  <dialog id="dlgPatient">
+    <form id="formPatient" method="dialog">
+      <h2 id="dlgTitre">Nouveau patient</h2>
+      <div class="row">
+        <div class="field"><label>Prénom *</label><input name="prenom" required></div>
+        <div class="field"><label>Nom *</label><input name="nom" required></div>
+      </div>
+      <div class="field"><label>Date de naissance</label><input name="dateNaissance" type="date"></div>
+      <div class="row">
+        <div class="field"><label>Email</label><input name="email" type="email"></div>
+        <div class="field"><label>Téléphone</label><input name="telephone"></div>
+      </div>
+      <div class="field"><label>Notes</label><textarea name="notes"></textarea></div>
+      <div class="actions" style="justify-content:flex-end">
+        <button type="button" class="secondary" onclick="dlgPatient.close()">Annuler</button>
+        <button type="submit">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Formulaire demande de documents -->
+  <dialog id="dlgDemande">
+    <form id="formDemande" method="dialog">
+      <h2>Demander des documents</h2>
+      <div class="field">
+        <label>Nombre de documents</label>
+        <input id="nbDocs" type="number" min="1" max="20" value="2">
+      </div>
+      <div id="libelles"></div>
+      <div class="field"><label>Message pour le patient (optionnel)</label>
+        <textarea name="message" placeholder="Bonjour, merci de déposer les documents suivants avant notre rendez-vous."></textarea>
+      </div>
+      <div class="actions" style="justify-content:flex-end">
+        <button type="button" class="secondary" onclick="dlgDemande.close()">Annuler</button>
+        <button type="submit">Générer le lien</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

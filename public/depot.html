@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dépôt de documents</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    .item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+    .item:first-of-type { border-top: none; }
+  </style>
+</head>
+<body>
+  <header><h1>Cabinet de psychomotricité</h1></header>
+  <main id="app"><div class="card empty">Chargement…</div></main>
+
+  <script>
+    const token = location.pathname.split('/').pop();
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function charger() {
+      const res = await fetch(`/api/public/demandes/${token}`);
+      if (!res.ok) {
+        document.getElementById('app').innerHTML = '<div class="card empty">Ce lien n\'est pas valide ou a expiré.<br>Contactez votre psychomotricienne.</div>';
+        return;
+      }
+      const d = await res.json();
+      const faits = d.items.filter((i) => i.depose).length;
+      document.getElementById('app').innerHTML = `
+        <div class="card">
+          <h2>Bonjour ${esc(d.prenom)},</h2>
+          <p style="white-space:pre-wrap">${esc(d.message) || 'Merci de déposer les documents ci-dessous.'}</p>
+          <p class="muted">${faits} / ${d.items.length} document(s) déposé(s)</p>
+        </div>
+        <div class="card">
+          ${d.items.map((it) => `
+            <div class="item">
+              <div>
+                <strong>${esc(it.libelle)}</strong><br>
+                ${it.depose
+                  ? `<span class="badge ok">✓ Déposé : ${esc(it.nomFichier)}</span>`
+                  : '<span class="muted">En attente</span>'}
+              </div>
+              <label class="btn ${it.depose ? 'secondary' : ''} small" style="margin:0;color:${it.depose ? 'var(--accent)' : '#fff'}">
+                ${it.depose ? 'Remplacer' : 'Déposer'}
+                <input type="file" hidden onchange="deposer('${it.id}', this)">
+              </label>
+            </div>`).join('')}
+        </div>
+        ${faits === d.items.length ? '<div class="card" style="text-align:center">Merci, tous les documents ont bien été reçus ✓</div>' : ''}`;
+    }
+
+    async function deposer(itemId, input) {
+      const f = input.files[0];
+      if (!f) return;
+      input.closest('label').textContent = 'Envoi…';
+      const fd = new FormData();
+      fd.append('fichier', f);
+      const res = await fetch(`/api/public/demandes/${token}/items/${itemId}`, { method: 'POST', body: fd });
+      if (!res.ok) alert('Erreur lors de l\'envoi, réessayez.');
+      charger();
+    }
+
+    charger();
+  </script>
+</body>
+</html>
