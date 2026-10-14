@@ -3,117 +3,143 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gestion patients</title>
+  <title>Cabinet – Patients</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <h1>Cabinet de psychomotricité</h1>
-    <nav class="actions">
-      <a href="#patients" class="btn secondary" data-vue="patients">Patients</a>
-      <a href="#formulaire" class="btn secondary" data-vue="formulaire">Champs de la fiche</a>
-      <a href="#documents" class="btn secondary" data-vue="documents">Documents demandés</a>
-      <button id="btnNouveau">+ Nouveau patient</button>
+  <header class="topbar">
+    <div class="brand">Cabinet de psychomotricité</div>
+    <nav class="nav" aria-label="Navigation principale">
+      <a href="#patients" data-vue="patients"></a>
+      <a href="#parametres" data-vue="parametres"></a>
     </nav>
   </header>
 
+  <!-- ================= Patients ================= -->
   <div class="layout" id="vuePatients">
-    <aside class="card">
-      <input id="recherche" placeholder="Rechercher un patient…" style="margin-bottom:10px">
+    <aside class="sidebar card" aria-label="Liste des patients">
+      <div class="sidebar-head">
+        <button class="btn primary" id="btnNouveau"></button>
+        <div class="recherche">
+          <span id="icRecherche"></span>
+          <input type="search" id="recherche" placeholder="Rechercher un patient" aria-label="Rechercher un patient" autocomplete="off">
+        </div>
+      </div>
       <ul class="patient-list" id="listePatients"></ul>
     </aside>
 
-    <main id="detail">
-      <div class="card empty">Sélectionnez ou créez un patient.</div>
-    </main>
+    <main id="detail" class="card"></main>
   </div>
 
-  <div id="vueFormulaire" class="page" hidden>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;flex-wrap:wrap">
-        <div>
-          <h2>Champs de la fiche patient</h2>
-          <p class="muted" style="margin:0">Ces champs complètent les informations de base de chaque patient.
-            Cochez « Demandé au patient » pour qu'ils apparaissent dans l'étape 1 du lien envoyé au patient.</p>
-        </div>
-        <div class="actions">
-          <button class="secondary" id="btnAjoutChamp">+ Ajouter un champ</button>
-          <button class="secondary" id="btnAjoutSection">+ Ajouter une section</button>
+  <!-- ================= Paramètres ================= -->
+  <div class="page" id="vueParametres" hidden>
+    <div class="page-head">
+      <h1>Paramètres</h1>
+    </div>
+    <nav class="subtabs" aria-label="Paramètres">
+      <a href="#parametres/fiche" data-onglet="fiche">Fiche patient</a>
+      <a href="#parametres/documents" data-onglet="documents">Documents demandés</a>
+    </nav>
+
+    <section id="paramFiche">
+      <div class="intro-param">
+        <p>Champs qui complètent la fiche de chaque patient. Les champs « Demandé au patient » apparaissent dans le formulaire envoyé par lien ; les autres restent internes.</p>
+        <div class="head-actions" style="margin:0">
+          <button class="btn" id="btnAjoutSection"></button>
+          <button class="btn" id="btnAjoutChamp"></button>
         </div>
       </div>
-    </div>
-    <div id="listeChamps"></div>
-    <div class="card barre-enregistrer">
-      <span class="muted" id="etatChamps"></span>
-      <button id="btnEnregistrerChamps">Enregistrer les champs</button>
-    </div>
-  </div>
+      <div id="listeChamps"></div>
+    </section>
 
-  <div id="vueDocuments" class="page" hidden>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;flex-wrap:wrap">
-        <div>
-          <h2>Documents demandés aux patients</h2>
-          <p class="muted" style="margin:0">Cette liste est proposée sous forme de cases à cocher quand vous créez une demande.
-            La précision (optionnelle) s'affiche au patient sous le nom du document.</p>
-        </div>
-        <button class="secondary" id="btnAjoutTypeDoc">+ Ajouter un document</button>
+    <section id="paramDocuments">
+      <div class="intro-param">
+        <p>Documents proposés en cases à cocher lorsque vous envoyez une demande. La précision s'affiche au patient sous le nom du document.</p>
+        <button class="btn" id="btnAjoutTypeDoc"></button>
       </div>
-    </div>
-    <div id="listeTypesDocs"></div>
-    <div class="card barre-enregistrer">
-      <span class="muted" id="etatTypesDocs"></span>
-      <button id="btnEnregistrerTypesDocs">Enregistrer la liste</button>
+      <div id="listeTypesDocs"></div>
+    </section>
+
+    <div class="barre-enregistrer" id="barreEnregistrer" hidden>
+      <span>Modifications non enregistrées</span>
+      <button class="btn sm" id="btnAnnulerParam">Annuler</button>
+      <button class="btn sm primary" id="btnEnregistrerParam">Enregistrer</button>
     </div>
   </div>
 
-  <!-- Formulaire infos de base -->
-  <dialog id="dlgPatient">
+  <!-- ================= Dialogue : patient ================= -->
+  <dialog id="dlgPatient" aria-labelledby="dlgTitre">
     <form id="formPatient" method="dialog">
-      <h2 id="dlgTitre">Nouveau patient</h2>
-      <div class="row">
-        <div class="field"><label>Prénom *</label><input name="prenom" required></div>
-        <div class="field"><label>Nom *</label><input name="nom" required></div>
+      <div class="dlg-corps">
+        <h2 id="dlgTitre">Nouveau patient</h2>
+        <div class="row">
+          <div class="field"><label for="fPrenom">Prénom <span class="requis">*</span></label><input id="fPrenom" name="prenom" required autocomplete="off"></div>
+          <div class="field"><label for="fNom">Nom <span class="requis">*</span></label><input id="fNom" name="nom" required autocomplete="off"></div>
+        </div>
+        <div class="field"><label for="fNaissance">Date de naissance</label><input id="fNaissance" name="dateNaissance" type="date"></div>
+        <div class="row">
+          <div class="field"><label for="fEmail">Email</label><input id="fEmail" name="email" type="email" autocomplete="off" placeholder="Pour envoyer les demandes"></div>
+          <div class="field"><label for="fTel">Téléphone</label><input id="fTel" name="telephone" type="tel" autocomplete="off"></div>
+        </div>
+        <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes" name="notes" rows="2"></textarea></div>
       </div>
-      <div class="field"><label>Date de naissance</label><input name="dateNaissance" type="date"></div>
-      <div class="row">
-        <div class="field"><label>Email</label><input name="email" type="email"></div>
-        <div class="field"><label>Téléphone</label><input name="telephone"></div>
-      </div>
-      <div class="field"><label>Notes</label><textarea name="notes"></textarea></div>
-      <div class="actions" style="justify-content:flex-end">
-        <button type="button" class="secondary" onclick="dlgPatient.close()">Annuler</button>
-        <button type="submit">Enregistrer</button>
+      <div class="dlg-pied">
+        <button type="button" class="lien-danger" id="btnSupprimerPatient" hidden>Supprimer ce patient</button>
+        <span class="espace"></span>
+        <button type="button" class="btn" data-fermer>Annuler</button>
+        <button type="submit" class="btn primary" id="btnEnregistrerPatient">Enregistrer</button>
       </div>
     </form>
   </dialog>
 
-  <!-- Formulaire demande -->
-  <dialog id="dlgDemande">
+  <!-- ================= Dialogue : demande ================= -->
+  <dialog id="dlgDemande" aria-labelledby="dlgDemandeTitre">
     <form id="formDemande" method="dialog">
-      <h2>Envoyer une demande au patient</h2>
-      <label class="option-etape">
-        <input type="checkbox" name="avecFormulaire" checked>
-        <span><strong>Étape 1 : formulaire</strong><br>
-          <span class="muted">Le patient remplit les champs marqués « Demandé au patient ».</span></span>
-      </label>
-      <div class="field" style="margin-top:14px">
-        <label>Étape 2 : documents à déposer</label>
-        <div id="catalogueDocs" class="catalogue"></div>
-        <div id="docsLibres"></div>
-        <button type="button" class="secondary small" id="btnDocLibre">+ Autre document</button>
+      <div class="dlg-corps">
+        <h2 id="dlgDemandeTitre">Envoyer une demande</h2>
+        <label class="option-etape">
+          <input type="checkbox" name="avecFormulaire" checked>
+          <span><strong>Formulaire à remplir</strong><br>
+            <span class="muted">Le patient complète les champs « Demandé au patient » de sa fiche.</span></span>
+        </label>
+        <div class="field">
+          <label>Documents à déposer</label>
+          <div id="catalogueDocs" class="catalogue"></div>
+          <div id="docsLibres"></div>
+          <button type="button" class="btn sm" id="btnDocLibre"></button>
+        </div>
+        <div class="field">
+          <label for="fMessage">Message au patient <span class="muted">(optionnel)</span></label>
+          <textarea id="fMessage" name="message" rows="2" placeholder="Bonjour, merci de compléter votre dossier avant notre rendez-vous."></textarea>
+        </div>
       </div>
-      <div class="field"><label>Message pour le patient (optionnel)</label>
-        <textarea name="message" placeholder="Bonjour, merci de compléter ce formulaire et de déposer les documents avant notre rendez-vous."></textarea>
-      </div>
-      <div class="actions" style="justify-content:flex-end">
-        <button type="button" class="secondary" onclick="dlgDemande.close()">Annuler</button>
-        <button type="submit">Générer le lien</button>
+      <div class="dlg-pied">
+        <span class="muted" id="resumeDemande"></span>
+        <span class="espace"></span>
+        <button type="button" class="btn" data-fermer>Annuler</button>
+        <button type="submit" class="btn primary" id="btnCreerDemande">Créer le lien</button>
       </div>
     </form>
+
+    <div id="demandeSucces" hidden>
+      <div class="dlg-corps succes">
+        <div class="rond" id="icSucces"></div>
+        <h2>Lien prêt à envoyer</h2>
+        <p>Envoyez ce lien au patient. Vous suivrez l'avancement dans l'onglet Demandes.</p>
+        <div class="lien-box">
+          <input readonly id="lienCree" aria-label="Lien patient">
+          <button type="button" class="btn primary" id="btnCopierCree"></button>
+        </div>
+      </div>
+      <div class="dlg-pied">
+        <a class="btn" id="btnEmailCree" hidden></a>
+        <span class="espace"></span>
+        <button type="button" class="btn" data-fermer>Terminé</button>
+      </div>
+    </div>
   </dialog>
 
-  <script src="/champs.js"></script>
+  <script src="/commun.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

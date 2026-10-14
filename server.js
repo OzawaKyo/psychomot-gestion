@@ -80,6 +80,8 @@ function addDocument(db, patientId, file, source, extra = {}) {
   return doc;
 }
 
+const demandeEnAttente = (d) => (d.avecFormulaire && !d.formulaireRempliAt) || d.items.some((i) => !i.documentId);
+
 function removeFile(doc) {
   fs.rm(path.join(UPLOAD_DIR, doc.fichier), { force: true }, () => {});
 }
@@ -90,7 +92,7 @@ const app = express();
 // La page patient (/d/...), son API et les fichiers qu'elle charge restent publics.
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const FICHIERS_PUBLICS = ['/style.css', '/champs.js'];
+const FICHIERS_PUBLICS = ['/style.css', '/commun.js'];
 const estPublic = (p) => FICHIERS_PUBLICS.includes(p) || p.startsWith('/d/') || p.startsWith('/api/public/');
 const egal = (a, b) => {
   const ha = crypto.createHash('sha256').update(a).digest();
@@ -119,6 +121,7 @@ app.get('/api/patients', (req, res) => {
   res.json(db.patients.map((p) => ({
     ...p,
     nbDocuments: db.documents.filter((d) => d.patientId === p.id).length,
+    demandesEnAttente: db.demandes.filter((d) => d.patientId === p.id && demandeEnAttente(d)).length,
   })));
 });
 
@@ -387,6 +390,16 @@ app.post('/api/public/demandes/:token/items/:itemId', upload.single('fichier'), 
   item.documentId = doc.id;
   save(db);
   res.status(201).json({ ok: true, nomFichier: doc.nom });
+});
+
+// Erreurs d'envoi de fichier : message lisible au lieu d'une page d'erreur
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE' ? 'Fichier trop volumineux (20 Mo maximum)' : 'Envoi du fichier impossible';
+    return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: message });
+  }
+  console.error(err);
+  res.status(500).json({ error: 'Erreur du serveur, réessayez' });
 });
 
 app.listen(PORT, () => console.log(`Psychomot gestion : http://localhost:${PORT}`));

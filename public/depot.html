@@ -3,29 +3,65 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Votre dossier</title>
+  <title>Votre dossier – Cabinet de psychomotricité</title>
   <link rel="stylesheet" href="/style.css">
   <style>
-    main { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
-    .item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
-    .item:first-of-type { border-top: none; }
+    .patient-page { max-width: 600px; margin: 0 auto; padding: 20px 16px 48px; }
+    .patient-page .card { padding: 20px; margin-bottom: 16px; }
+    .patient-page h1 { font-size: 22px; margin-bottom: 6px; }
+    .patient-page .intro p { color: var(--muted); margin: 0; white-space: pre-wrap; }
+
+    .stepper { display: flex; align-items: center; gap: 10px; margin: 0 4px 16px; }
+    .stepper .trait { flex: 1; height: 2px; background: var(--border-strong); border-radius: 2px; }
+    .stepper .trait.fait { background: var(--accent); }
+    .pas { display: flex; align-items: center; gap: 8px; background: none; border: none; padding: 4px; font: inherit; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: var(--radius-sm); }
+    .pas:disabled { cursor: default; }
+    .pas .num { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border-strong); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; background: var(--surface); }
+    .pas.actif { color: var(--accent); }
+    .pas.actif .num { border-color: var(--accent); }
+    .pas.fait .num { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .doc { display: flex; flex-direction: column; gap: 10px; padding: 16px 0; border-top: 1px solid var(--border); }
+    .doc:first-of-type { border-top: none; padding-top: 4px; }
+    .doc-ligne { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .doc .aide { color: var(--muted); font-size: 14px; }
+    .doc .depose { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 14px; word-break: break-word; }
+    .doc .erreur { color: var(--danger); font-size: 14px; display: flex; gap: 6px; align-items: center; }
+    .doc .btn { align-self: start; }
+    @media (max-width: 480px) { .doc .btn { align-self: stretch; } }
+    .progression { height: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin: 10px 0 4px; }
+    .progression span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+
+    .fin { text-align: center; padding: 36px 20px !important; }
+    .fin .rond { width: 64px; height: 64px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+    .fin h2 { font-size: 20px; margin-bottom: 6px; }
+    .fin p { color: var(--muted); margin: 0; }
+    .pied { text-align: center; color: var(--muted); font-size: 13px; margin-top: 8px; }
+    .form-pied { display: flex; justify-content: flex-end; padding-top: 8px; }
+    @media (max-width: 480px) { .form-pied .btn { width: 100%; } }
   </style>
 </head>
 <body>
-  <header><h1>Cabinet de psychomotricité</h1></header>
-  <main id="app"><div class="card empty">Chargement…</div></main>
+  <header class="topbar"><div class="brand" style="display:block">Cabinet de psychomotricité</div></header>
+  <main class="patient-page" id="app" aria-live="polite"><div class="card detail-vide">Chargement…</div></main>
 
-  <script src="/champs.js"></script>
+  <script src="/commun.js"></script>
   <script>
     const token = location.pathname.split('/').pop();
     const app = document.getElementById('app');
+    const ACCEPT = 'image/*,.pdf,.doc,.docx,.odt';
     let d = null;
     let etape = 1;
+    const erreurs = {}; // erreurs d'envoi par document
 
     async function charger(forcerEtape) {
-      const res = await fetch(`/api/public/demandes/${token}`);
-      if (!res.ok) {
-        app.innerHTML = '<div class="card empty">Ce lien n\'est pas valide ou a expiré.<br>Contactez votre psychomotricienne.</div>';
+      let res;
+      try { res = await fetch(`/api/public/demandes/${token}`); } catch { res = null; }
+      if (!res?.ok) {
+        app.innerHTML = `<div class="card fin">
+          <div class="rond">${icone('alert', 30)}</div>
+          <h2>Ce lien n'est plus valide</h2>
+          <p>Il a peut-être été remplacé ou désactivé.<br>Contactez votre psychomotricienne pour en recevoir un nouveau.</p></div>`;
         return;
       }
       d = await res.json();
@@ -34,54 +70,78 @@
       afficher();
     }
 
+    const docsFaits = () => d.items.filter((i) => i.depose).length;
+    const termine = () => (!d.avecFormulaire || d.formulaireRempli) && docsFaits() === d.items.length;
+
     function stepper() {
       if (!d.avecFormulaire || !d.items.length) return '';
       const pas = (n, titre, fait) => `
-        <button class="pas ${etape === n ? 'actif' : ''} ${fait ? 'fait' : ''}" onclick="allerA(${n})" ${n === 2 && !d.formulaireRempli ? 'disabled' : ''}>
-          <span class="num">${fait ? '✓' : n}</span> ${titre}
+        <button class="pas ${etape === n ? 'actif' : ''} ${fait ? 'fait' : ''}" onclick="allerA(${n})"
+          ${n === 2 && !d.formulaireRempli ? 'disabled' : ''} ${etape === n ? 'aria-current="step"' : ''}>
+          <span class="num">${fait ? icone('check', 14) : n}</span>${titre}
         </button>`;
-      const docsFaits = d.items.every((i) => i.depose);
-      return `<div class="stepper">${pas(1, 'Formulaire', d.formulaireRempli)}<span class="trait"></span>${pas(2, 'Documents', docsFaits)}</div>`;
+      return `<nav class="stepper" aria-label="Étapes">
+        ${pas(1, 'Vos informations', d.formulaireRempli)}
+        <span class="trait ${d.formulaireRempli ? 'fait' : ''}"></span>
+        ${pas(2, 'Vos documents', docsFaits() === d.items.length)}
+      </nav>`;
     }
 
-    function allerA(n) { etape = n; afficher(); }
+    function allerA(n) { etape = n; afficher(); window.scrollTo(0, 0); }
 
     function afficher() {
-      const intro = `
-        <div class="card">
-          <h2>Bonjour ${escHtml(d.prenom)},</h2>
-          <p style="white-space:pre-wrap;margin-bottom:0">${escHtml(d.message) || 'Merci de compléter votre dossier ci-dessous.'}</p>
+      if (termine() && etape !== 1) {
+        app.innerHTML = `<div class="card fin">
+          <div class="rond">${icone('check', 32)}</div>
+          <h2>Merci ${escHtml(d.prenom)}, votre dossier est complet</h2>
+          <p>Tout a bien été transmis. Vous pouvez fermer cette page.</p>
+          ${d.avecFormulaire ? '<p style="margin-top:16px"><button class="btn" onclick="allerA(1)">Modifier mes informations</button></p>' : ''}
         </div>`;
-      app.innerHTML = intro + stepper() + (etape === 1 ? etapeFormulaire() : etapeDocuments());
+        return;
+      }
+      app.innerHTML = `
+        <div class="card intro">
+          <h1>Bonjour ${escHtml(d.prenom)}</h1>
+          <p>${escHtml(d.message) || 'Merci de compléter votre dossier avant votre rendez-vous.'}</p>
+        </div>
+        ${stepper()}
+        ${etape === 1 ? etapeFormulaire() : etapeDocuments()}
+        <p class="pied">Ces informations sont transmises uniquement à votre psychomotricienne.</p>`;
       if (etape === 1) document.getElementById('formPatient').onsubmit = envoyerFormulaire;
     }
 
     function etapeFormulaire() {
+      const requis = d.champs.some((c) => c.requis);
       return `
         <form class="card" id="formPatient">
-          <h2>${d.items.length ? 'Étape 1 : ' : ''}Vos informations</h2>
-          <p class="muted">Les champs marqués d'un * sont obligatoires.</p>
+          ${requis ? '<p class="muted">Les champs marqués <span class="requis">*</span> sont obligatoires.</p>' : ''}
           ${d.champs.map((c) => champInput(c, d.valeurs[c.id])).join('')}
-          <div class="actions" style="justify-content:flex-end">
-            <button type="submit">${d.items.length ? 'Enregistrer et continuer →' : 'Envoyer'}</button>
+          <p class="erreur-champ" id="erreurForm" hidden></p>
+          <div class="form-pied">
+            <button type="submit" class="btn primary lg">${d.items.length ? 'Continuer' : 'Envoyer'}</button>
           </div>
         </form>`;
     }
 
     async function envoyerFormulaire(e) {
       e.preventDefault();
-      const valeurs = lireChamps(e.target, d.champs);
-      const manquants = champsManquants(d.champs, valeurs);
-      if (manquants.length) return alert('Merci de compléter : ' + manquants.join(', '));
-      const btn = e.target.querySelector('button[type=submit]');
-      btn.disabled = true; btn.textContent = 'Envoi…';
-      const res = await fetch(`/api/public/demandes/${token}/formulaire`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(valeurs),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Erreur lors de l\'envoi, réessayez.');
-        btn.disabled = false; btn.textContent = 'Réessayer';
+      const form = e.target;
+      const valeurs = lireChamps(form, d.champs);
+      if (!verifierCasesRequises(form, d.champs, valeurs)) return;
+      const btn = form.querySelector('[type=submit]');
+      const err = document.getElementById('erreurForm');
+      btn.disabled = true;
+      btn.textContent = 'Envoi…';
+      try {
+        const res = await fetch(`/api/public/demandes/${token}/formulaire`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(valeurs),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error);
+      } catch (ex) {
+        err.textContent = ex.message || 'L\'envoi n\'a pas fonctionné. Vérifiez votre connexion et réessayez.';
+        err.hidden = false;
+        btn.disabled = false;
+        btn.textContent = 'Réessayer';
         return;
       }
       window.scrollTo(0, 0);
@@ -89,41 +149,54 @@
     }
 
     function etapeDocuments() {
-      if (!d.items.length) {
-        return '<div class="card" style="text-align:center">Merci, vos informations ont bien été envoyées ✓</div>';
-      }
-      const faits = d.items.filter((i) => i.depose).length;
-      const toutFait = faits === d.items.length && (!d.avecFormulaire || d.formulaireRempli);
+      const n = docsFaits(), total = d.items.length;
       return `
         <div class="card">
-          <h2>${d.avecFormulaire ? 'Étape 2 : ' : ''}Vos documents</h2>
-          <p class="muted">${faits} / ${d.items.length} document(s) déposé(s)</p>
+          <h2>Vos documents</h2>
+          <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${n}"><span style="width:${(n / total) * 100}%"></span></div>
+          <p class="muted">${n} sur ${total} envoyé${n > 1 ? 's' : ''} · PDF, photo ou document Word, 20 Mo maximum</p>
           ${d.items.map((it) => `
-            <div class="item">
-              <div>
-                <strong>${escHtml(it.libelle)}</strong><br>
-                ${it.aide ? `<span class="muted">${escHtml(it.aide)}</span><br>` : ''}
-                ${it.depose
-                  ? `<span class="badge ok">✓ Déposé : ${escHtml(it.nomFichier)}</span>`
-                  : '<span class="muted">En attente</span>'}
+            <div class="doc" id="doc-${it.id}">
+              <div class="doc-ligne">
+                <div>
+                  <strong>${escHtml(it.libelle)}</strong>
+                  ${it.aide ? `<div class="aide">${escHtml(it.aide)}</div>` : ''}
+                </div>
+                ${it.depose ? `<span class="chip ok">${icone('check', 12)}Envoyé</span>` : ''}
               </div>
-              <label class="btn ${it.depose ? 'secondary' : ''} small" style="margin:0;color:${it.depose ? 'var(--accent)' : '#fff'}">
-                ${it.depose ? 'Remplacer' : 'Déposer'}
-                <input type="file" hidden onchange="deposer('${it.id}', this)">
-              </label>
+              ${it.depose ? `<div class="depose">${icone('file', 16)}${escHtml(it.nomFichier)}</div>` : ''}
+              ${erreurs[it.id] ? `<div class="erreur" role="alert">${icone('alert', 16)}${escHtml(erreurs[it.id])}</div>` : ''}
+              <button type="button" class="btn ${it.depose ? '' : 'primary'} lg" onclick="choisir('${it.id}')">
+                ${icone('upload', 18)}${it.depose ? 'Remplacer le fichier' : 'Ajouter le fichier'}
+              </button>
             </div>`).join('')}
-        </div>
-        ${toutFait ? '<div class="card" style="text-align:center">Merci, votre dossier est complet ✓</div>' : ''}`;
+        </div>`;
     }
 
-    async function deposer(itemId, input) {
-      const f = input.files[0];
-      if (!f) return;
-      input.closest('label').textContent = 'Envoi…';
+    function choisir(itemId) {
+      const input = Object.assign(document.createElement('input'), { type: 'file', accept: ACCEPT });
+      input.onchange = () => deposer(itemId, input.files[0]);
+      input.click();
+    }
+
+    async function deposer(itemId, fichier) {
+      if (!fichier) return;
+      const btn = document.querySelector(`#doc-${itemId} .btn`);
+      delete erreurs[itemId];
+      if (fichier.size > 20 * 1024 * 1024) {
+        erreurs[itemId] = 'Ce fichier dépasse 20 Mo. Essayez une photo moins lourde ou un PDF.';
+        return afficher();
+      }
+      btn.disabled = true;
+      btn.innerHTML = 'Envoi en cours…';
       const fd = new FormData();
-      fd.append('fichier', f);
-      const res = await fetch(`/api/public/demandes/${token}/items/${itemId}`, { method: 'POST', body: fd });
-      if (!res.ok) alert('Erreur lors de l\'envoi, réessayez.');
+      fd.append('fichier', fichier);
+      try {
+        const res = await fetch(`/api/public/demandes/${token}/items/${itemId}`, { method: 'POST', body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error);
+      } catch (ex) {
+        erreurs[itemId] = ex.message || 'L\'envoi n\'a pas fonctionné. Vérifiez votre connexion et réessayez.';
+      }
       charger(2);
     }
 
